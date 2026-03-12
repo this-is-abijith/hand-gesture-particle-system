@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>J.A.R.V.I.S — Gesture Interface</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --arc:      #00d4ff;
+      --arc-dim:  #0088aa;
+      --arc-glow: rgba(0,212,255,0.18);
+      --arc-deep: rgba(0,212,255,0.06);
+      --bg:       #010a0f;
+      --panel:    rgba(0,18,28,0.85);
+      --border:   rgba(0,212,255,0.25);
+      --border-b: rgba(0,212,255,0.08);
+      --text:     #a8e8f8;
+      --text-dim: rgba(0,212,255,0.35);
+      --orb:      'Orbitron', sans-serif;
+      --raj:      'Rajdhani', sans-serif;
+    }
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html, body {
+      width:100%; height:100vh; overflow:hidden;
+      background:var(--bg); font-family:var(--raj);
+      color:var(--text); cursor:crosshair;
+    }
+    body::before {
+      content:''; position:fixed; inset:0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size:40px 40px;
+      animation:gridPulse 8s ease-in-out infinite;
+      pointer-events:none; z-index:0;
+    }
+    @keyframes gridPulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+    body::after {
+      content:''; position:fixed; inset:0;
+      background:radial-gradient(ellipse at center, transparent 40%, rgba(0,5,10,0.85) 100%);
+      pointer-events:none; z-index:1;
+    }
+
+    /* ── Layout ── */
+    .hud {
+      position:relative; z-index:2;
+      display:grid;
+      grid-template-rows:52px 1fr 48px;
+      grid-template-columns:220px 1fr 220px;
+      height:100vh;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      grid-column:1/-1;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 24px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(0,30,45,0.9) 0%, transparent 100%);
+      position:relative;
+    }
+    .topbar::after {
+      content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent, var(--arc), transparent);
+    }
+    .tb-logo {
+      font-family:var(--orb); font-size:0.8rem; font-weight:700;
+      letter-spacing:0.3em; color:var(--arc);
+      text-shadow:0 0 20px var(--arc), 0 0 40px rgba(0,212,255,0.4);
+      animation:flicker 6s ease-in-out infinite;
+    }
+    @keyframes flicker { 0%,95%,100%{opacity:1} 96%{opacity:.7} 97%{opacity:1} 98%{opacity:.85} }
+    .tb-center {
+      position:absolute; left:50%; transform:translateX(-50%);
+    }
+    .tb-status {
+      font-family:var(--orb); font-size:0.52rem;
+      letter-spacing:0.2em; color:var(--text-dim); text-transform:uppercase;
+    }
+    .tb-status.live { color:var(--arc); text-shadow:0 0 10px var(--arc); }
+    .tb-right { display:flex; align-items:center; gap:14px; }
+    .stat-pill {
+      display:flex; align-items:center; gap:5px;
+      font-family:var(--orb); font-size:0.5rem; letter-spacing:0.15em;
+      color:var(--text-dim); padding:3px 9px;
+      border:1px solid var(--border-b); border-radius:2px;
+    }
+    .stat-pill .pip { width:4px; height:4px; border-radius:50%; background:var(--text-dim); transition:all .3s; }
+    .stat-pill.active .pip { background:var(--arc); box-shadow:0 0 6px var(--arc); }
+    .stat-pill.active { color:var(--arc); border-color:var(--border); }
+
+    /* ── Left Panel ── */
+    .panel-left {
+      border-right:1px solid var(--border-b);
+      background:var(--panel);
+      display:flex; flex-direction:column;
+      padding:14px 13px; gap:10px;
+      backdrop-filter:blur(10px);
+      position:relative; overflow:hidden;
+    }
+    .panel-left::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent, var(--arc-dim), transparent);
+    }
+
+    /* ── Canvas ── */
+    .canvas-area { position:relative; overflow:hidden; }
+    #particleCanvas { position:absolute; inset:0; width:100%; height:100%; }
+
+    .hud-corner { position:absolute; width:28px; height:28px; pointer-events:none; }
+    .hud-corner.tl { top:10px; left:10px; border-top:2px solid var(--arc); border-left:2px solid var(--arc); box-shadow:-2px -2px 8px var(--arc-glow); }
+    .hud-corner.tr { top:10px; right:10px; border-top:2px solid var(--arc); border-right:2px solid var(--arc); box-shadow:2px -2px 8px var(--arc-glow); }
+    .hud-corner.bl { bottom:10px; left:10px; border-bottom:2px solid var(--arc); border-left:2px solid var(--arc); box-shadow:-2px 2px 8px var(--arc-glow); }
+    .hud-corner.br { bottom:10px; right:10px; border-bottom:2px solid var(--arc); border-right:2px solid var(--arc); box-shadow:2px 2px 8px var(--arc-glow); }
+
+    .scan-line {
+      position:absolute; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent 0%, var(--arc) 50%, transparent 100%);
+      opacity:0.12; pointer-events:none;
+      animation:scanV 5s linear infinite;
+    }
+    @keyframes scanV { 0%{top:0%;opacity:.18} 100%{top:100%;opacity:0} }
+
+    #reticle {
+      position:absolute; pointer-events:none;
+      transform:translate(-50%,-50%);
+      opacity:0; transition:opacity .15s;
+    }
+    #reticle.on { opacity:1; }
+    #reticle svg { display:block; animation:rotateCW 4s linear infinite; }
+    @keyframes rotateCW { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+    .gesture-hud {
+      position:absolute; top:18px; left:50%;
+      transform:translateX(-50%);
+      display:flex; flex-direction:column; align-items:center; gap:3px;
+      pointer-events:none; white-space:nowrap;
+    }
+    .g-tag { font-family:var(--orb); font-size:0.42rem; letter-spacing:0.35em; color:var(--text-dim); }
+    .g-name-hud {
+      font-family:var(--orb); font-size:1.5rem; font-weight:700;
+      letter-spacing:0.15em; color:var(--arc);
+      text-shadow:0 0 20px var(--arc), 0 0 50px rgba(0,212,255,0.5);
+      opacity:0; transform:translateY(6px);
+      transition:opacity .15s, transform .15s;
+    }
+    .g-name-hud.on { opacity:1; transform:translateY(0); }
+    .g-desc-hud {
+      font-family:var(--raj); font-size:0.62rem; font-weight:300;
+      letter-spacing:0.2em; color:var(--text-dim); text-transform:uppercase;
+      opacity:0; transition:opacity .2s .05s;
+    }
+    .g-desc-hud.on { opacity:1; }
+
+    .empty {
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px;
+      pointer-events:none; transition:opacity .4s;
+    }
+    .empty-ring {
+      width:80px; height:80px; border-radius:50%;
+      border:1px solid var(--border-b);
+      display:flex; align-items:center; justify-content:center;
+      animation:emptyPulse 3s ease-in-out infinite;
+    }
+    @keyframes emptyPulse {
+      0%,100%{box-shadow:0 0 20px var(--arc-deep);border-color:var(--border-b)}
+      50%{box-shadow:0 0 40px var(--arc-glow);border-color:var(--border)}
+    }
+    .empty-icon { font-size:1.8rem; filter:drop-shadow(0 0 8px var(--arc)); }
+    .empty p { font-family:var(--orb); font-size:0.5rem; letter-spacing:0.3em; color:var(--text-dim); text-transform:uppercase; }
+
+    /* ── Right Panel ── */
+    .panel-right {
+      border-left:1px solid var(--border-b);
+      background:var(--panel);
+      display:flex; flex-direction:column;
+      backdrop-filter:blur(10px);
+      overflow:hidden; position:relative;
+    }
+    .panel-right::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent, var(--arc-dim), transparent);
+    }
+
+    .feed-wrap { position:relative; flex-shrink:0; border-bottom:1px solid var(--border-b); }
+    .feed-wrap img {
+      width:100%; display:block;
+      filter:brightness(0.9) saturate(0) sepia(0.3) hue-rotate(160deg) brightness(1.1);
+      opacity:0.9;
+    }
+    .feed-overlay {
+      position:absolute; inset:0; pointer-events:none;
+      background:linear-gradient(180deg, transparent 60%, rgba(0,18,28,0.7) 100%);
+    }
+    .feed-corner-tl,.feed-corner-tr,.feed-corner-bl,.feed-corner-br { position:absolute; width:12px; height:12px; }
+    .feed-corner-tl { top:5px; left:5px;   border-top:1px solid var(--arc); border-left:1px solid var(--arc); }
+    .feed-corner-tr { top:5px; right:5px;  border-top:1px solid var(--arc); border-right:1px solid var(--arc); }
+    .feed-corner-bl { bottom:5px; left:5px;  border-bottom:1px solid var(--arc); border-left:1px solid var(--arc); }
+    .feed-corner-br { bottom:5px; right:5px; border-bottom:1px solid var(--arc); border-right:1px solid var(--arc); }
+    .feed-lbl {
+      position:absolute; bottom:7px; left:50%; transform:translateX(-50%);
+      font-family:var(--orb); font-size:0.4rem; letter-spacing:0.25em;
+      color:var(--arc); text-shadow:0 0 8px var(--arc); text-transform:uppercase;
+    }
+
+    /* Shared panel parts */
+    .hud-section { padding:11px 13px; border-bottom:1px solid var(--border-b); }
+    .hud-section-title {
+      font-family:var(--orb); font-size:0.44rem; letter-spacing:0.28em;
+      color:var(--arc-dim); text-transform:uppercase; margin-bottom:9px;
+      display:flex; align-items:center; gap:6px;
+    }
+    .hud-section-title::before { content:''; width:10px; height:1px; background:var(--arc-dim); }
+
+    /* Gesture list */
+    .g-list { display:flex; flex-direction:column; gap:1px; }
+    .g-item {
+      display:grid; grid-template-columns:6px 20px 1fr auto;
+      align-items:center; gap:6px;
+      padding:4px 5px; border:1px solid transparent; border-radius:1px;
+      transition:all .12s; cursor:default;
+    }
+    .g-item.on { background:rgba(0,212,255,0.06); border-color:rgba(0,212,255,0.2); box-shadow:0 0 10px rgba(0,212,255,0.07); }
+    .g-item.on .g-pip { background:var(--arc); box-shadow:0 0 5px var(--arc); }
+    .g-item.on .g-ilabel { color:var(--arc); }
+    .g-pip { width:4px; height:4px; border-radius:50%; background:var(--border-b); transition:all .12s; }
+    .g-iemoji { font-size:0.78rem; line-height:1; }
+    .g-ilabel { font-family:var(--raj); font-size:0.6rem; font-weight:500; letter-spacing:0.05em; color:var(--text-dim); transition:color .12s; }
+    .g-ifx { font-family:var(--orb); font-size:0.4rem; letter-spacing:0.1em; color:var(--text-dim); text-transform:uppercase; }
+
+    /* Data */
+    .data-list { display:flex; flex-direction:column; gap:6px; }
+    .d-row { display:flex; justify-content:space-between; align-items:center; }
+    .d-key { font-family:var(--orb); font-size:0.4rem; letter-spacing:0.18em; color:var(--text-dim); text-transform:uppercase; }
+    .d-val { font-family:var(--orb); font-size:0.54rem; letter-spacing:0.05em; color:var(--arc); font-variant-numeric:tabular-nums; }
+    .d-val.dim { color:var(--text-dim); }
+    .hud-bar { height:1px; background:rgba(0,212,255,0.07); border-radius:1px; overflow:hidden; margin-top:2px; }
+    .hud-bar-f { height:100%; background:linear-gradient(90deg, var(--arc-dim), var(--arc)); transition:width .06s linear; box-shadow:0 0 4px var(--arc); }
+
+    /* Arc reactor */
+    .arc-reactor { display:flex; flex-direction:column; align-items:center; gap:7px; padding:12px; }
+    .arc-ring-wrap { position:relative; width:60px; height:60px; }
+    .arc-ring-wrap svg { position:absolute; inset:0; }
+    .spin-slow { animation:rotateCW 12s linear infinite; }
+    .spin-fast { animation:rotateCCW 4s linear infinite; }
+    @keyframes rotateCCW { from{transform:rotate(0deg)} to{transform:rotate(-360deg)} }
+    .arc-center-val {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      font-family:var(--orb); font-size:0.5rem; font-weight:700;
+      color:var(--arc); text-shadow:0 0 10px var(--arc);
+    }
+    .arc-label { font-family:var(--orb); font-size:0.38rem; letter-spacing:0.25em; color:var(--text-dim); text-transform:uppercase; }
+
+    /* Buttons */
+    .hud-btns { display:flex; flex-wrap:wrap; gap:5px; }
+    .hud-btn {
+      background:transparent; border:1px solid rgba(0,212,255,0.2); color:var(--text-dim);
+      font-family:var(--orb); font-size:0.42rem; letter-spacing:0.15em; padding:5px 9px;
+      cursor:pointer; border-radius:1px; text-transform:uppercase; transition:all .12s;
+      clip-path:polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+    }
+    .hud-btn:hover { background:rgba(0,212,255,0.08); border-color:var(--arc); color:var(--arc); box-shadow:0 0 10px rgba(0,212,255,0.18); }
+    .hud-btn.on { background:rgba(0,212,255,0.1); border-color:var(--arc); color:var(--arc); box-shadow:0 0 14px rgba(0,212,255,0.22); }
+
+    /* Bottom bar */
+    .bottombar {
+      grid-column:1/-1; display:flex; align-items:center; justify-content:space-between;
+      padding:0 20px; border-top:1px solid var(--border-b);
+      background:linear-gradient(0deg, rgba(0,20,30,0.9) 0%, transparent 100%);
+      position:relative;
+    }
+    .bottombar::before {
+      content:''; position:absolute; top:0; left:10%; right:10%; height:1px;
+      background:linear-gradient(90deg, transparent, rgba(0,212,255,0.3), transparent);
+    }
+    .bb-item { font-family:var(--orb); font-size:0.4rem; letter-spacing:0.14em; color:var(--text-dim); text-transform:uppercase; }
+    .bb-item span { color:var(--arc); }
+    .grow { flex:1; }
+  </style>
+</head>
+<body>
+<div class="hud">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="tb-logo">J.A.R.V.I.S</div>
+    <div class="tb-center">
+      <span class="tb-status" id="sysStatus">INITIALIZING SYSTEMS</span>
+    </div>
+    <div class="tb-right">
+      <div class="stat-pill" id="pillCam"><div class="pip"></div><span>OPTICS</span></div>
+      <div class="stat-pill" id="pillHand"><div class="pip"></div><span id="pillHandTxt">SCANNING</span></div>
+      <div class="stat-pill" id="pillFps"><div class="pip"></div><span id="fpsTxt">— FPS</span></div>
+    </div>
+  </header>
+
+  <!-- Left Panel -->
+  <aside class="panel-left">
+    <div class="hud-section-title">POWER CORE</div>
+    <div class="arc-reactor">
+      <div class="arc-ring-wrap">
+        <svg class="spin-slow" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="28" stroke="rgba(0,212,255,0.1)" stroke-width="1"/>
+          <circle cx="32" cy="32" r="28" stroke="var(--arc)" stroke-width="1" stroke-dasharray="40 136" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+        <svg class="spin-fast" viewBox="0 0 64 64" fill="none">
+          <circle cx="32" cy="32" r="20" stroke="rgba(0,212,255,0.07)" stroke-width="1"/>
+          <circle cx="32" cy="32" r="20" stroke="var(--arc-dim)" stroke-width="1.5" stroke-dasharray="20 106" stroke-linecap="round" opacity="0.8"/>
+        </svg>
+        <svg viewBox="0 0 64 64" fill="none" style="position:absolute;inset:0">
+          <circle cx="32" cy="32" r="10" stroke="var(--arc)" stroke-width="1" opacity="0.5"/>
+          <circle cx="32" cy="32" r="5" fill="var(--arc)" opacity="0.4"/>
+          <circle cx="32" cy="32" r="5" fill="var(--arc)" opacity="0.25">
+            <animate attributeName="r" values="5;9;5" dur="2s" repeatCount="indefinite"/>
+            <animate attributeName="opacity" values="0.25;0;0.25" dur="2s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+        <div class="arc-center-val" id="arcVal">○</div>
+      </div>
+      <div class="arc-label">ARC REACTOR · ONLINE</div>
+    </div>
+
+    <div class="hud-section-title">GESTURE MATRIX</div>
+    <div class="g-list">
+      <div class="g-item" id="r-POINT">       <div class="g-pip"></div><span class="g-iemoji">☝️</span><span class="g-ilabel">Point</span>       <span class="g-ifx">MOVE</span></div>
+      <div class="g-item" id="r-FIST">        <div class="g-pip"></div><span class="g-iemoji">✊</span> <span class="g-ilabel">Fist</span>        <span class="g-ifx">BLAST</span></div>
+      <div class="g-item" id="r-OPEN">        <div class="g-pip"></div><span class="g-iemoji">🖐️</span><span class="g-ilabel">Open</span>        <span class="g-ifx">PULL</span></div>
+      <div class="g-item" id="r-PINCH">       <div class="g-pip"></div><span class="g-iemoji">🤏</span><span class="g-ilabel">Pinch</span>       <span class="g-ifx">COMPRESS</span></div>
+      <div class="g-item" id="r-PEACE">       <div class="g-pip"></div><span class="g-iemoji">✌️</span><span class="g-ilabel">Peace</span>       <span class="g-ifx">SPLIT</span></div>
+      <div class="g-item" id="r-THREE">       <div class="g-pip"></div><span class="g-iemoji">🤟</span><span class="g-ilabel">Three</span>       <span class="g-ifx">ORBIT</span></div>
+      <div class="g-item" id="r-PINKY">       <div class="g-pip"></div><span class="g-iemoji">🤙</span><span class="g-ilabel">Pinky</span>       <span class="g-ifx">SPIRAL</span></div>
+      <div class="g-item" id="r-THUMBS_UP">   <div class="g-pip"></div><span class="g-iemoji">👍</span><span class="g-ilabel">Thumbs Up</span>  <span class="g-ifx">RISE</span></div>
+      <div class="g-item" id="r-GUN">         <div class="g-pip"></div><span class="g-iemoji">🤞</span><span class="g-ilabel">Gun</span>         <span class="g-ifx">SHOOT</span></div>
+      <div class="g-item" id="r-DOUBLE_PINCH"><div class="g-pip"></div><span class="g-iemoji">👌</span><span class="g-ilabel">OK Pinch</span>   <span class="g-ifx">FREEZE</span></div>
+    </div>
+
+    <div class="grow"></div>
+    <div class="hud-section-title">CONTROLS</div>
+    <div class="hud-btns">
+      <button class="hud-btn on" id="bTrail" onclick="toggleTrail()">Trail</button>
+      <button class="hud-btn" onclick="spawnExtra()">Deploy</button>
+      <button class="hud-btn" onclick="resetAll()">Reset</button>
+    </div>
+  </aside>
+
+  <!-- Canvas -->
+  <div class="canvas-area" id="cWrap">
+    <canvas id="particleCanvas"></canvas>
+    <div class="hud-corner tl"></div>
+    <div class="hud-corner tr"></div>
+    <div class="hud-corner bl"></div>
+    <div class="hud-corner br"></div>
+    <div class="scan-line"></div>
+
+    <div id="reticle">
+      <svg width="46" height="46" viewBox="0 0 46 46" fill="none">
+        <circle cx="23" cy="23" r="17" stroke="#00d4ff" stroke-width="0.7" stroke-dasharray="8 4" opacity="0.5"/>
+        <circle cx="23" cy="23" r="9"  stroke="#00d4ff" stroke-width="0.7" opacity="0.3"/>
+        <circle cx="23" cy="23" r="2.5" fill="#00d4ff" opacity="0.7"/>
+        <line x1="23" y1="2"  x2="23" y2="11" stroke="#00d4ff" stroke-width="0.7" opacity="0.4"/>
+        <line x1="23" y1="35" x2="23" y2="44" stroke="#00d4ff" stroke-width="0.7" opacity="0.4"/>
+        <line x1="2"  y1="23" x2="11" y2="23" stroke="#00d4ff" stroke-width="0.7" opacity="0.4"/>
+        <line x1="35" y1="23" x2="44" y2="23" stroke="#00d4ff" stroke-width="0.7" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <div class="gesture-hud">
+      <div class="g-tag">// GESTURE RECOGNIZED //</div>
+      <div class="g-name-hud" id="gNameHud">—</div>
+      <div class="g-desc-hud" id="gDescHud"></div>
+    </div>
+
+    <div class="empty" id="emptyState">
+      <div class="empty-ring"><div class="empty-icon">✋</div></div>
+      <p>Awaiting hand detection</p>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <aside class="panel-right">
+    <div class="feed-wrap">
+      <img id="webcamFeed" src="/video_feed" alt="feed"
+           onload="document.getElementById('pillCam').classList.add('active');
+                   document.getElementById('sysStatus').textContent='SYSTEMS ONLINE';
+                   document.getElementById('sysStatus').classList.add('live')"/>
+      <div class="feed-overlay"></div>
+      <div class="feed-corner-tl"></div><div class="feed-corner-tr"></div>
+      <div class="feed-corner-bl"></div><div class="feed-corner-br"></div>
+      <div class="feed-lbl">VISUAL INPUT · LIVE</div>
+    </div>
+
+    <div class="hud-section">
+      <div class="hud-section-title">TELEMETRY</div>
+      <div class="data-list">
+        <div class="d-row"><span class="d-key">GESTURE</span><span class="d-val" id="dG">—</span></div>
+        <div class="d-row"><span class="d-key">RAW INPUT</span><span class="d-val dim" id="dR">—</span></div>
+        <div class="d-row"><span class="d-key">COORD X</span><span class="d-val" id="dX">—</span></div>
+        <div class="hud-bar"><div class="hud-bar-f" id="bX" style="width:0%"></div></div>
+        <div class="d-row"><span class="d-key">COORD Y</span><span class="d-val" id="dY">—</span></div>
+        <div class="hud-bar"><div class="hud-bar-f" id="bY" style="width:0%"></div></div>
+        <div class="d-row"><span class="d-key">PINCH Δ</span><span class="d-val" id="dP">—</span></div>
+        <div class="hud-bar"><div class="hud-bar-f" id="bP" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="hud-section">
+      <div class="hud-section-title">SYSTEM</div>
+      <div class="data-list">
+        <div class="d-row"><span class="d-key">PARTICLES</span><span class="d-val" id="dCount">80</span></div>
+        <div class="d-row"><span class="d-key">RENDER</span><span class="d-val" id="dFps2">— FPS</span></div>
+        <div class="d-row"><span class="d-key">MODEL</span><span class="d-val" style="font-size:0.4rem">MEDIAPIPE 0.10</span></div>
+        <div class="d-row"><span class="d-key">STATUS</span><span class="d-val" id="dStatus">STANDBY</span></div>
+      </div>
+    </div>
+
+    <div class="grow"></div>
+
+    <div class="hud-section" style="border-bottom:none">
+      <div class="hud-section-title">IDENTIFIER</div>
+      <div class="data-list">
+        <div class="d-row"><span class="d-key">UNIT</span><span class="d-val">MARK I</span></div>
+        <div class="d-row"><span class="d-key">OPERATOR</span><span class="d-val">AUTHORIZED</span></div>
+        <div class="d-row"><span class="d-key">UPTIME</span><span class="d-val" id="dUptime">00:00:00</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Bottom Bar -->
+  <footer class="bottombar">
+    <div class="bb-item">STARK INDUSTRIES · <span>GESTURE PARTICLE ENGINE</span></div>
+    <div class="bb-item">NEURAL LINK · <span>ACTIVE</span></div>
+    <div class="bb-item">THREAT LEVEL · <span id="threatLvl">MINIMAL</span></div>
+    <div class="bb-item">v2.0 · <span>CLASSIFIED</span></div>
+  </footer>
+</div>
+
+<script>
+// ════════ CANVAS ════════
+const canvas = document.getElementById('particleCanvas');
+const ctx    = canvas.getContext('2d');
+const cWrap  = document.getElementById('cWrap');
+function resize() { canvas.width = cWrap.clientWidth; canvas.height = cWrap.clientHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+// ════════ PARTICLE ════════
+// Pure WHITE particles — no colour at all, just light
+class Particle {
+  constructor(x, y) {
+    this.x     = x  ?? Math.random() * canvas.width;
+    this.y     = y  ?? Math.random() * canvas.height;
+    this.vx    = (Math.random() - 0.5) * 2.0;
+    this.vy    = (Math.random() - 0.5) * 2.0;
+    this.baseR = 1.0 + Math.random() * 2.0;
+    this.r     = this.baseR;
+    this.alpha = 0.4 + Math.random() * 0.5;
+    this.angle = Math.random() * Math.PI * 2;
+  }
+
+  update(g, hx, hy) {
+    const cx   = hx * canvas.width;
+    const cy   = hy * canvas.height;
+    const dx   = cx - this.x;
+    const dy   = cy - this.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+
+    // ── TUNED for snappy, immediate response ──
+    switch(g) {
+
+      case 'POINT':
+        // Very strong pull toward fingertip — feels instant
+        this.vx += (dx / dist) * 3.5;
+        this.vy += (dy / dist) * 3.5;
+        this.vx *= 0.75;   // high damping = snappy stop
+        this.vy *= 0.75;
+        this.r = this.baseR;
+        break;
+
+      case 'OPEN':
+        // Strong gravity well
+        this.vx += (dx / dist) * Math.min(3.0, 280/(dist+1)) * 0.08;
+        this.vy += (dy / dist) * Math.min(3.0, 280/(dist+1)) * 0.08;
+        this.vx *= 0.82; this.vy *= 0.82;
+        this.r = this.baseR;
+        break;
+
+      case 'FIST':
+        // Instant hard blast
+        this.vx -= (dx / dist) * Math.min(10, 300/(dist+1)) * 0.18;
+        this.vy -= (dy / dist) * Math.min(10, 300/(dist+1)) * 0.18;
+        this.vx *= 0.90; this.vy *= 0.90;
+        this.r = this.baseR;
+        break;
+
+      case 'PINCH':
+        // Suck inward fast + shrink
+        this.vx += (dx / dist) * 2.5;
+        this.vy += (dy / dist) * 2.5;
+        this.vx *= 0.80; this.vy *= 0.80;
+        this.r = Math.max(0.3, this.baseR * Math.max(0.2, pinchVal * 12));
+        break;
+
+      case 'PEACE':
+        // Split streams strongly
+        const side = this.y < cy ? -1 : 1;
+        this.vx += (dx / dist) * 0.06;
+        this.vy += side * 0.9;
+        this.vx *= 0.90; this.vy *= 0.90;
+        this.r = this.baseR;
+        break;
+
+      case 'THREE':
+        // Fast orbit
+        this.angle += 0.04;
+        const orR = 80 + Math.sin(this.angle * 0.5) * 30;
+        this.vx += (cx + Math.cos(this.angle) * orR - this.x) * 0.07;
+        this.vy += (cy + Math.sin(this.angle) * orR - this.y) * 0.07;
+        this.vx *= 0.84; this.vy *= 0.84;
+        this.r = this.baseR;
+        break;
+
+      case 'PINKY':
+        // Snappy spiral expansion
+        this.angle += 0.035;
+        const sr = (Date.now() * 0.025 % 160);
+        this.vx += (cx + Math.cos(this.angle) * sr - this.x) * 0.06;
+        this.vy += (cy + Math.sin(this.angle) * sr - this.y) * 0.06;
+        this.vx *= 0.86; this.vy *= 0.86;
+        this.r = this.baseR;
+        break;
+
+      case 'THUMBS_UP':
+        // Strong upward lift
+        this.vy -= 0.9;
+        this.vx += (dx / dist) * 0.05;
+        this.vx *= 0.94; this.vy *= 0.92;
+        this.r = this.baseR * 1.3;
+        break;
+
+      case 'GUN':
+        // Hard rightward beam on Y-aligned particles
+        if (Math.abs(this.y - cy) < 40) {
+          this.vx += 2.5;
+        } else {
+          this.vx += (dx/dist) * 0.06;
+          this.vy += (dy/dist) * 0.06;
+        }
+        this.vx *= 0.91; this.vy *= 0.94;
+        this.r = this.baseR * 0.7;
+        break;
+
+      case 'DOUBLE_PINCH':
+        // Hard freeze
+        this.vx *= 0.92; this.vy *= 0.92;
+        this.r = this.baseR;
+        break;
+
+      default:
+        // Idle — gentle float
+        this.vx += (Math.random() - 0.5) * 0.08;
+        this.vy += (Math.random() - 0.5) * 0.08;
+        this.vx *= 0.984; this.vy *= 0.984;
+        this.r = this.baseR;
+    }
+
+    // Speed cap — higher cap = more explosive
+    const spd = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+    if (spd > 22) { this.vx = this.vx/spd*22; this.vy = this.vy/spd*22; }
+
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < 0)             this.x = canvas.width;
+    if (this.x > canvas.width)  this.x = 0;
+    if (this.y < 0)             this.y = canvas.height;
+    if (this.y > canvas.height) this.y = 0;
+  }
+
+  draw() {
+    // Soft white glow + bright white core — zero colour
+    if (this.r > 1.5) {
+      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.r * 3.5);
+      grad.addColorStop(0,   `rgba(255,255,255,${this.alpha * 0.5})`);
+      grad.addColorStop(0.5, `rgba(255,255,255,${this.alpha * 0.15})`);
+      grad.addColorStop(1,   `rgba(255,255,255,0)`);
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r * 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+    // Solid bright core
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255,255,255,${this.alpha})`;
+    ctx.fill();
+  }
+}
+
+// ════════ STATE ════════
+let particles = Array.from({length:80}, () => new Particle());
+let trailOn   = true;
+let handX=0.5, handY=0.5;
+let currentGesture='NONE', pinchVal=1.0, handActive=false;
+let fpsCount=0, fpsTime=performance.now();
+const startTime = Date.now();
+
+// ════════ GESTURE META ════════
+const GESTURES = {
+  POINT:        { label:'POINT',      desc:'TRACKING TARGET'  },
+  FIST:         { label:'FIST',       desc:'REPULSOR BLAST'   },
+  OPEN:         { label:'OPEN HAND',  desc:'GRAVITY PULL'     },
+  PINCH:        { label:'PINCH',      desc:'COMPRESS FIELD'   },
+  PEACE:        { label:'PEACE',      desc:'STREAM SPLIT'     },
+  THREE:        { label:'THREE',      desc:'ORBIT LOCK'       },
+  PINKY:        { label:'PINKY',      desc:'SPIRAL DEPLOY'    },
+  THUMBS_UP:    { label:'THUMBS UP',  desc:'ALTITUDE RISE'    },
+  GUN:          { label:'GUN',        desc:'BEAM FIRE'        },
+  DOUBLE_PINCH: { label:'OK PINCH',   desc:'FREEZE FIELD'     },
+  NONE:         { label:'—',          desc:''                 },
+};
+
+// ════════ POLL — fast 30ms interval ════════
+async function poll() {
+  try {
+    const d = await (await fetch('/gesture')).json();
+    currentGesture = d.gesture;
+    pinchVal       = d.pinch ?? 1.0;
+    // Faster lerp = 0.5 instead of 0.3 → hand position updates quicker
+    handX += (d.x - handX) * 0.5;
+    handY += (d.y - handY) * 0.5;
+    handActive = d.gesture !== 'NONE';
+    updateUI(d);
+  } catch(_) {}
+  setTimeout(poll, 30);   // ← was 50ms, now 30ms = ~33 polls/sec
+}
+
+// ════════ UI ════════
+function updateUI(d) {
+  const meta = GESTURES[d.gesture] || GESTURES.NONE;
+
+  const gn = document.getElementById('gNameHud');
+  const gd = document.getElementById('gDescHud');
+  if (d.gesture !== 'NONE') {
+    gn.textContent = meta.label; gn.classList.add('on');
+    gd.textContent = meta.desc;  gd.classList.add('on');
+  } else {
+    gn.classList.remove('on'); gd.classList.remove('on');
+  }
+
+  document.querySelectorAll('.g-item').forEach(r => r.classList.remove('on'));
+  const row = document.getElementById('r-' + d.gesture);
+  if (row) row.classList.add('on');
+
+  document.getElementById('dG').textContent  = meta.label;
+  document.getElementById('dR').textContent  = d.raw || '—';
+  document.getElementById('dX').textContent  = handActive ? d.x.toFixed(3) : '—';
+  document.getElementById('dY').textContent  = handActive ? d.y.toFixed(3) : '—';
+  document.getElementById('dP').textContent  = handActive ? d.pinch.toFixed(3) : '—';
+  document.getElementById('bX').style.width  = (d.x * 100).toFixed(1) + '%';
+  document.getElementById('bY').style.width  = (d.y * 100).toFixed(1) + '%';
+  const pp = d.gesture === 'PINCH' ? Math.min(100,(1-d.pinch*10)*100) : 0;
+  document.getElementById('bP').style.width  = pp.toFixed(1) + '%';
+
+  document.getElementById('pillHand').classList.toggle('active', handActive);
+  document.getElementById('pillHandTxt').textContent = handActive ? 'TRACKING' : 'SCANNING';
+  document.getElementById('dStatus').textContent     = handActive ? 'TRACKING' : 'STANDBY';
+  document.getElementById('dCount').textContent      = particles.length;
+  document.getElementById('arcVal').textContent      = handActive ? '●' : '○';
+
+  if (d.gesture==='FIST')      document.getElementById('threatLvl').textContent = 'CRITICAL';
+  else if (d.gesture==='OPEN') document.getElementById('threatLvl').textContent = 'HIGH';
+  else if (handActive)         document.getElementById('threatLvl').textContent = 'ELEVATED';
+  else                         document.getElementById('threatLvl').textContent = 'MINIMAL';
+
+  const rt = document.getElementById('reticle');
+  if (handActive) {
+    rt.style.left = (handX * canvas.width)  + 'px';
+    rt.style.top  = (handY * canvas.height) + 'px';
+    rt.classList.add('on');
+  } else {
+    rt.classList.remove('on');
+  }
+  document.getElementById('emptyState').style.opacity = handActive ? '0' : '1';
+}
+
+// ════════ DRAW ════════
+function draw() {
+  requestAnimationFrame(draw);
+
+  if (trailOn) {
+    // Slightly faster fade = trails don't linger too long
+    ctx.fillStyle = 'rgba(1,10,15,0.25)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Subtle cyan connection lines only when hand active
+  if (handActive) {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i+1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d2 = dx*dx + dy*dy;
+        if (d2 < 3600) {
+          ctx.strokeStyle = `rgba(0,212,255,${0.06*(1-d2/3600)})`;
+          ctx.lineWidth = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  for (const p of particles) {
+    p.update(currentGesture, handX, handY);
+    p.draw();
+  }
+
+  // FPS + uptime
+  fpsCount++;
+  const now = performance.now();
+  if (now - fpsTime >= 1000) {
+    const fps = fpsCount; fpsCount = 0; fpsTime = now;
+    document.getElementById('fpsTxt').textContent = fps + ' FPS';
+    document.getElementById('dFps2').textContent  = fps + ' FPS';
+    document.getElementById('pillFps').classList.toggle('active', fps > 25);
+  }
+
+  const up = Math.floor((Date.now() - startTime) / 1000);
+  document.getElementById('dUptime').textContent =
+    [Math.floor(up/3600), Math.floor((up%3600)/60), up%60]
+    .map(n => String(n).padStart(2,'0')).join(':');
+}
+
+// ════════ CONTROLS ════════
+function toggleTrail() {
+  trailOn = !trailOn;
+  document.getElementById('bTrail').classList.toggle('on', trailOn);
+}
+function spawnExtra() {
+  const ox = handActive ? handX*canvas.width  : canvas.width/2;
+  const oy = handActive ? handY*canvas.height : canvas.height/2;
+  for (let i=0; i<30; i++) {
+    const p = new Particle(ox, oy);
+    p.vx = (Math.random()-.5)*14;
+    p.vy = (Math.random()-.5)*14;
+    particles.push(p);
+  }
+}
+function resetAll() {
+  particles = Array.from({length:80}, () => new Particle());
+}
+
+poll(); draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# MediaPipe model (large binary, auto-downloads)
+hand_landmarker.task
+
+# OpenCV / OS junk
+.DS_Store
+Thumbs.db
